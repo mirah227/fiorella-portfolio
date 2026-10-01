@@ -3,7 +3,25 @@
   <url>
     <loc>https://fiorella-seo.com/</loc>
     <lastmod>2026-08-28</lastmod>
-    <changefreq>monthly</changefreq>
+    <changefreq>weekly</changefreq>
     <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://fiorella-seo.com/blog/search-intent-over-keyword-density</loc>
+    <lastmod>2026-08-28</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://fiorella-seo.com/blog/core-web-vitals-what-moves-the-needle</loc>
+    <lastmod>2026-08-28</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://fiorella-seo.com/blog/on-page-seo-checklist-for-service-pages</loc>
+    <lastmod>2026-08-28</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
   </url>
 </urlset>

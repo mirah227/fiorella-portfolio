@@ -17,19 +17,6 @@ export const Hero: React.FC<HeroProps> = ({ onOpenContact, onViewWork }) => {
           
           {/* Left Column: Core Messaging & CTAs */}
           <div className="lg:col-span-7 flex flex-col items-start text-left">
-            
-            {/* Small Professional Label */}
-            <div
-              id="hero-label-badge"
-              className="inline-flex items-center gap-2 bg-[#f8f8f8] dark:bg-[#171717] border border-[#e5e5e5] dark:border-[#262626] rounded-full px-3.5 py-1.5 mb-6 text-xs font-bold text-[#1a1a1a] dark:text-[#ededed] tracking-wide"
-            >
-              <span className="w-2 h-2 rounded-full bg-black dark:bg-white animate-pulse" />
-              <span className="uppercase tracking-wider">SEO Specialist</span>
-              <span className="text-[#666666] dark:text-[#a3a3a3]">•</span>
-              <span className="text-[#666666] dark:text-[#a3a3a3] font-medium hidden sm:inline">Keyword Research • On-Page • Technical SEO</span>
-              <span className="text-[#666666] dark:text-[#a3a3a3] font-medium sm:hidden">Organic Growth</span>
-            </div>
-
             {/* Main Headline */}
             <h1
               id="hero-main-heading"
@@ -98,32 +85,22 @@ export const Hero: React.FC<HeroProps> = ({ onOpenContact, onViewWork }) => {
               {/* Main Card / Frame */}
               <div className="relative bg-white dark:bg-[#141414] border border-[#e5e5e5] dark:border-[#262626] rounded-2xl p-6 sm:p-7 shadow-xs w-full">
                 
-                {/* Visual Header */}
-                <div className="flex items-center justify-between mb-5 pb-4 border-b border-[#e5e5e5] dark:border-[#262626]">
-                  <div className="flex items-center gap-3">
-                    {/* Portrait Avatar */}
-                    <div className="relative">
-                      <div className="w-14 h-14 rounded-full bg-[#f8f8f8] dark:bg-[#262626] ring-2 ring-black dark:ring-white overflow-hidden flex items-center justify-center text-black font-black text-xl">
-                        <img
-                          src="/fiorella.jpg"
-                          alt="Fiorella, SEO Specialist"
-                          className="w-full h-full object-cover"
-                          loading="eager"
-                        />
-                      </div>
-                      <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-500 border-2 border-white dark:border-[#141414] rounded-full" title="Active & Available" />
+                {/* Methodology Header */}
+                <div className="mb-5 pb-4 border-b border-[#e5e5e5] dark:border-[#262626]">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-black dark:bg-white" />
+                      <h2 className="text-xs font-black tracking-wider uppercase text-[#1a1a1a] dark:text-white">
+                        How I Approach SEO
+                      </h2>
                     </div>
-
-                    <div>
-                      <div className="text-base font-black text-[#1a1a1a] dark:text-white leading-tight">Fiorella</div>
-                      <p className="text-xs text-black dark:text-neutral-300 font-bold uppercase tracking-wide">SEO Specialist</p>
-                      <p className="text-[11px] text-[#666666] dark:text-[#a3a3a3]">Available for projects</p>
-                    </div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#666666] dark:text-[#a3a3a3] bg-[#f8f8f8] dark:bg-[#1a1a1a] border border-[#e5e5e5] dark:border-[#262626] px-2 py-0.5 rounded">
+                      Principles
+                    </span>
                   </div>
-
-                  <span className="text-[11px] bg-black dark:bg-white text-white dark:text-black font-bold px-2.5 py-1 rounded-md">
-                    2026
-                  </span>
+                  <p className="text-xs text-[#666666] dark:text-[#a3a3a3] leading-relaxed font-normal">
+                    Search visibility starts with understanding intent, building a strong technical foundation, and creating content that serves the right audience.
+                  </p>
                 </div>
 
                 {/* Core Focus Micro-Cards */}
@@ -135,7 +112,7 @@ export const Hero: React.FC<HeroProps> = ({ onOpenContact, onViewWork }) => {
                       </div>
                       <div>
                         <div className="text-xs font-bold text-[#1a1a1a] dark:text-white">Search Visibility</div>
-                        <div className="text-[11px] text-[#666666] dark:text-[#a3a3a3]">Intent-matched indexation</div>
+                        <div className="text-[11px] text-[#666666] dark:text-[#a3a3a3]">Intent-matched indexing</div>
                       </div>
                     </div>
                     <span className="text-[11px] font-bold text-black dark:text-white bg-white dark:bg-[#141414] border border-[#e5e5e5] dark:border-[#262626] px-2 py-0.5 rounded">High Impact</span>

@@ -5,9 +5,16 @@ import { useTheme } from '../context/ThemeContext';
 interface NavbarProps {
   onOpenContact: () => void;
   activeSection: string;
+  onNavigateHome?: () => void;
+  onNavigateSection?: (sectionId: string) => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ onOpenContact, activeSection }) => {
+export const Navbar: React.FC<NavbarProps> = ({
+  onOpenContact,
+  activeSection,
+  onNavigateHome,
+  onNavigateSection,
+}) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
@@ -30,11 +37,15 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenContact, activeSection }) 
     { label: 'Contact', href: '#contact', id: 'contact' },
   ];
 
-  const handleNavClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+  const handleNavClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string, id: string) => {
     e.preventDefault();
     setMobileMenuOpen(false);
     if (href === '#contact') {
       onOpenContact();
+      return;
+    }
+    if (onNavigateSection) {
+      onNavigateSection(id);
       return;
     }
     const targetElement = document.querySelector(href);
@@ -55,7 +66,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenContact, activeSection }) 
         {/* Brand Logo */}
         <a
           href="#hero"
-          onClick={(e) => handleNavClick(e, '#hero')}
+          onClick={(e) => handleNavClick(e, '#hero', 'hero')}
           className="flex items-center gap-2.5 text-[#1a1a1a] dark:text-[#ededed] font-extrabold text-lg tracking-tight group"
           id="navbar-brand"
         >
@@ -76,7 +87,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenContact, activeSection }) 
               <a
                 key={link.id}
                 href={link.href}
-                onClick={(e) => handleNavClick(e, link.href)}
+                onClick={(e) => handleNavClick(e, link.href, link.id)}
                 className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ${
                   isActive
                     ? 'bg-black dark:bg-white text-white dark:text-black shadow-xs'
@@ -148,7 +159,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenContact, activeSection }) 
               <a
                 key={link.id}
                 href={link.href}
-                onClick={(e) => handleNavClick(e, link.href)}
+                onClick={(e) => handleNavClick(e, link.href, link.id)}
                 className="px-3 py-2 text-sm font-bold text-[#1a1a1a] dark:text-[#ededed] hover:bg-[#f8f8f8] dark:hover:bg-[#1f1f1f] rounded-lg"
               >
                 {link.label}

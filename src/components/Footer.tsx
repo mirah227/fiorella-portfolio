@@ -3,9 +3,10 @@ import { ArrowUpRight, Mail } from 'lucide-react';
 
 interface FooterProps {
   onOpenContact: () => void;
+  onOpenDashboard?: () => void;
 }
 
-export const Footer: React.FC<FooterProps> = ({ onOpenContact }) => {
+export const Footer: React.FC<FooterProps> = ({ onOpenContact, onOpenDashboard }) => {
   const currentYear = new Date().getFullYear();
 
   const handleNavClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
@@ -55,6 +56,14 @@ export const Footer: React.FC<FooterProps> = ({ onOpenContact }) => {
             <a href="#insights" onClick={(e) => handleNavClick(e, '#insights')} className="hover:text-black dark:hover:text-white transition-colors">
               Blog
             </a>
+            {onOpenDashboard && (
+              <button
+                onClick={onOpenDashboard}
+                className="hover:text-black dark:hover:text-white transition-colors text-xs font-bold text-[#666666] dark:text-[#a3a3a3]"
+              >
+                Dashboard
+              </button>
+            )}
             <button onClick={onOpenContact} className="hover:text-black dark:hover:text-white transition-colors font-bold text-black dark:text-white underline">
               Contact
             </button>

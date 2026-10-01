@@ -11,21 +11,61 @@ import { FinalCTA } from './components/FinalCTA';
 import { Footer } from './components/Footer';
 import { ContactModal } from './components/ContactModal';
 import { CaseStudyModal } from './components/CaseStudyModal';
-import { ArticleModal } from './components/ArticleModal';
 import { ServiceModal } from './components/ServiceModal';
 import { AboutModal } from './components/AboutModal';
-import { ServiceItem, ArticleData } from './data/portfolioData';
+import { ArticlePage } from './components/blog/ArticlePage';
+import { AdminDashboard } from './components/admin/AdminDashboard';
+import { ServiceItem } from './data/portfolioData';
+import { Article } from './types/blog';
+import { restoreDefaultSEO } from './utils/seo';
+
+type AppView = 'home' | 'article' | 'admin';
 
 export default function App() {
   const [activeSection, setActiveSection] = useState('hero');
+  const [currentView, setCurrentView] = useState<AppView>('home');
+  const [articleSlug, setArticleSlug] = useState<string>('');
+
+  // Modals state
   const [isContactOpen, setIsContactOpen] = useState(false);
   const [isCaseStudyOpen, setIsCaseStudyOpen] = useState(false);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
   const [selectedService, setSelectedService] = useState<ServiceItem | null>(null);
-  const [selectedArticle, setSelectedArticle] = useState<ArticleData | null>(null);
 
-  // Scroll spy to highlight active section in navbar
+  // Initialize view from current URL and listen to popstate
   useEffect(() => {
+    const parseUrl = () => {
+      const path = window.location.pathname;
+      if (path.startsWith('/admin')) {
+        setCurrentView('admin');
+      } else if (path.startsWith('/blog/')) {
+        const slug = path.replace(/^\/blog\//, '').replace(/\/$/, '');
+        if (slug) {
+          setArticleSlug(slug);
+          setCurrentView('article');
+        } else {
+          setCurrentView('home');
+        }
+      } else {
+        setCurrentView('home');
+        restoreDefaultSEO();
+      }
+    };
+
+    parseUrl();
+
+    const handlePopState = () => {
+      parseUrl();
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Scroll spy to highlight active section in navbar (when on home)
+  useEffect(() => {
+    if (currentView !== 'home') return;
+
     const sections = ['hero', 'about', 'services', 'case-study', 'skills', 'insights'];
     
     const handleScroll = () => {
@@ -45,9 +85,42 @@ export default function App() {
 
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  }, [currentView]);
+
+  // Navigation helpers
+  const navigateToHome = (sectionId?: string) => {
+    setCurrentView('home');
+    restoreDefaultSEO();
+    window.history.pushState(null, '', sectionId ? `#${sectionId}` : '/');
+    if (sectionId) {
+      setTimeout(() => {
+        const el = document.getElementById(sectionId);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 50);
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const navigateToArticle = (slug: string) => {
+    setArticleSlug(slug);
+    setCurrentView('article');
+    window.history.pushState(null, '', `/blog/${slug}`);
+  };
+
+  const navigateToAdmin = () => {
+    setCurrentView('admin');
+    window.history.pushState(null, '', '/admin');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const scrollToSection = (sectionId: string) => {
+    if (currentView !== 'home') {
+      navigateToHome(sectionId);
+      return;
+    }
     const el = document.getElementById(sectionId);
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -60,52 +133,76 @@ export default function App() {
       <Navbar
         activeSection={activeSection}
         onOpenContact={() => setIsContactOpen(true)}
+        onNavigateHome={() => navigateToHome()}
+        onNavigateSection={(sectionId) => scrollToSection(sectionId)}
       />
 
       {/* Main Content Area */}
       <main className="flex-grow">
-        {/* 1. Hero Section */}
-        <Hero
-          onOpenContact={() => setIsContactOpen(true)}
-          onViewWork={() => scrollToSection('case-study')}
-        />
+        {currentView === 'home' && (
+          <>
+            {/* 1. Hero Section */}
+            <Hero
+              onOpenContact={() => setIsContactOpen(true)}
+              onViewWork={() => scrollToSection('case-study')}
+            />
 
-        {/* 2. Trust / Expertise Strip */}
-        <TrustStrip />
+            {/* 2. Trust / Expertise Strip */}
+            <TrustStrip />
 
-        {/* 3. About / Introduction */}
-        <AboutSection
-          onLearnMore={() => setIsAboutOpen(true)}
-        />
+            {/* 3. About / Introduction */}
+            <AboutSection
+              onLearnMore={() => setIsAboutOpen(true)}
+            />
 
-        {/* 4. Services */}
-        <ServicesSection
-          onSelectService={(service) => setSelectedService(service)}
-          onOpenContact={() => setIsContactOpen(true)}
-        />
+            {/* 4. Services */}
+            <ServicesSection
+              onSelectService={(service) => setSelectedService(service)}
+              onOpenContact={() => setIsContactOpen(true)}
+            />
 
-        {/* 5. Featured Case Study */}
-        <CaseStudySection
-          onOpenCaseStudy={() => setIsCaseStudyOpen(true)}
-        />
+            {/* 5. Featured Case Study */}
+            <CaseStudySection
+              onOpenCaseStudy={() => setIsCaseStudyOpen(true)}
+            />
 
-        {/* 6. Skills & Tools */}
-        <SkillsSection />
+            {/* 6. Skills & Tools */}
+            <SkillsSection />
 
-        {/* 7. SEO Insights */}
-        <InsightsSection
-          onSelectArticle={(article) => setSelectedArticle(article)}
-        />
+            {/* 7. Dynamic SEO Insights */}
+            <InsightsSection
+              onSelectArticle={(article: Article) => navigateToArticle(article.slug)}
+              onOpenDashboard={() => navigateToAdmin()}
+            />
 
-        {/* 8. Final CTA */}
-        <FinalCTA
-          onOpenContact={() => setIsContactOpen(true)}
-        />
+            {/* 8. Final CTA */}
+            <FinalCTA
+              onOpenContact={() => setIsContactOpen(true)}
+            />
+          </>
+        )}
+
+        {currentView === 'article' && (
+          <ArticlePage
+            slug={articleSlug}
+            onNavigateHome={() => navigateToHome('insights')}
+            onNavigateToArticle={(newSlug) => navigateToArticle(newSlug)}
+            onOpenContact={() => setIsContactOpen(true)}
+          />
+        )}
+
+        {currentView === 'admin' && (
+          <AdminDashboard
+            onNavigateHome={() => navigateToHome()}
+            onNavigateToArticle={(slug) => navigateToArticle(slug)}
+          />
+        )}
       </main>
 
       {/* Minimal Footer */}
       <Footer
         onOpenContact={() => setIsContactOpen(true)}
+        onOpenDashboard={() => navigateToAdmin()}
       />
 
       {/* Interactive Modals */}
@@ -130,12 +227,6 @@ export default function App() {
       <ServiceModal
         service={selectedService}
         onClose={() => setSelectedService(null)}
-        onOpenContact={() => setIsContactOpen(true)}
-      />
-
-      <ArticleModal
-        article={selectedArticle}
-        onClose={() => setSelectedArticle(null)}
         onOpenContact={() => setIsContactOpen(true)}
       />
     </div>
