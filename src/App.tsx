@@ -15,9 +15,11 @@ import { ServiceModal } from './components/ServiceModal';
 import { AboutModal } from './components/AboutModal';
 import { ArticlePage } from './components/blog/ArticlePage';
 import { AdminDashboard } from './components/admin/AdminDashboard';
+import { AdminLogin } from './components/admin/AdminLogin';
 import { ServiceItem } from './data/portfolioData';
 import { Article } from './types/blog';
 import { restoreDefaultSEO } from './utils/seo';
+import { checkSession, AuthUser } from './services/authClient';
 
 type AppView = 'home' | 'article' | 'admin';
 
@@ -26,11 +28,24 @@ export default function App() {
   const [currentView, setCurrentView] = useState<AppView>('home');
   const [articleSlug, setArticleSlug] = useState<string>('');
 
+  // Admin authentication state
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(false);
+  const [adminUser, setAdminUser] = useState<AuthUser | null>(null);
+  const [authChecking, setAuthChecking] = useState<boolean>(false);
+
   // Modals state
   const [isContactOpen, setIsContactOpen] = useState(false);
   const [isCaseStudyOpen, setIsCaseStudyOpen] = useState(false);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
   const [selectedService, setSelectedService] = useState<ServiceItem | null>(null);
+
+  const verifyAdminSession = async () => {
+    setAuthChecking(true);
+    const session = await checkSession();
+    setIsAdminAuthenticated(session.authenticated);
+    setAdminUser(session.user || null);
+    setAuthChecking(false);
+  };
 
   // Initialize view from current URL and listen to popstate
   useEffect(() => {
@@ -38,6 +53,7 @@ export default function App() {
       const path = window.location.pathname;
       if (path.startsWith('/admin')) {
         setCurrentView('admin');
+        verifyAdminSession();
       } else if (path.startsWith('/blog/')) {
         const slug = path.replace(/^\/blog\//, '').replace(/\/$/, '');
         if (slug) {
@@ -114,6 +130,7 @@ export default function App() {
     setCurrentView('admin');
     window.history.pushState(null, '', '/admin');
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    verifyAdminSession();
   };
 
   const scrollToSection = (sectionId: string) => {
@@ -192,10 +209,33 @@ export default function App() {
         )}
 
         {currentView === 'admin' && (
-          <AdminDashboard
-            onNavigateHome={() => navigateToHome()}
-            onNavigateToArticle={(slug) => navigateToArticle(slug)}
-          />
+          authChecking ? (
+            <div className="min-h-screen pt-32 pb-24 flex items-center justify-center bg-white dark:bg-[#0d0d0d]">
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-8 h-8 border-2 border-black dark:border-white border-t-transparent dark:border-t-transparent rounded-full animate-spin" />
+                <span className="text-xs font-bold uppercase tracking-wider text-[#666666] dark:text-[#a3a3a3]">
+                  Verifying Admin Access...
+                </span>
+              </div>
+            </div>
+          ) : isAdminAuthenticated ? (
+            <AdminDashboard
+              adminEmail={adminUser?.email}
+              onLogout={() => {
+                setIsAdminAuthenticated(false);
+                setAdminUser(null);
+              }}
+              onNavigateHome={() => navigateToHome()}
+              onNavigateToArticle={(slug) => navigateToArticle(slug)}
+            />
+          ) : (
+            <AdminLogin
+              onLoginSuccess={() => {
+                verifyAdminSession();
+              }}
+              onNavigateHome={() => navigateToHome()}
+            />
+          )
         )}
       </main>
 
