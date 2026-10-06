@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { Article, BlogCategory } from '../types/blog';
-import { AdminUser, hashPassword } from './auth';
-import { INITIAL_ARTICLES, INITIAL_CATEGORIES } from '../services/articleStorage';
+import { AdminUser, hashPassword, verifyPassword } from './auth';
+import { INITIAL_ARTICLES, INITIAL_CATEGORIES } from '../data/initialBlogData';
 
 interface DatabaseSchema {
   users: AdminUser[];
@@ -11,36 +11,37 @@ interface DatabaseSchema {
 }
 
 function resolveDbPath(): string {
-  // Check if root data dir is writable, else use /tmp
-  const localDir = path.resolve(process.cwd(), 'data');
+  // If running on Vercel or Serverless, always use /tmp to avoid touching read-only /var/task
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    return path.join('/tmp', 'fiorella_blog_data.json');
+  }
+
+  // Local development: check if data dir exists or is writable
   try {
+    const localDir = path.resolve(process.cwd(), 'data');
     if (!fs.existsSync(localDir)) {
       fs.mkdirSync(localDir, { recursive: true });
     }
-    const testFile = path.join(localDir, '.write-test');
-    fs.writeFileSync(testFile, 'ok');
-    fs.unlinkSync(testFile);
     return path.join(localDir, 'blog_data.json');
   } catch {
-    const tmpDir = path.resolve('/tmp');
-    return path.join(tmpDir, 'fiorella_blog_data.json');
+    return path.join('/tmp', 'fiorella_blog_data.json');
   }
 }
 
 const DB_PATH = resolveDbPath();
 
 function getInitialDb(): DatabaseSchema {
-  let initialUsers: AdminUser[] = [];
+  const initialUsers: AdminUser[] = [];
 
   // Check if admin is pre-configured via environment variables
-  const envEmail = process.env.ADMIN_EMAIL;
+  const envEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
   const envPassword = process.env.ADMIN_PASSWORD;
 
   if (envEmail && envPassword) {
     const { salt, hash } = hashPassword(envPassword);
     initialUsers.push({
       id: 'admin_env_owner',
-      email: envEmail.trim().toLowerCase(),
+      email: envEmail,
       passwordHash: hash,
       salt,
       role: 'admin',
@@ -58,18 +59,45 @@ function getInitialDb(): DatabaseSchema {
 
 let inMemoryDb: DatabaseSchema | null = null;
 
+function syncEnvUser(db: DatabaseSchema): void {
+  const envEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+  const envPassword = process.env.ADMIN_PASSWORD;
+  if (envEmail && envPassword) {
+    const existingIdx = db.users.findIndex((u) => u.email.toLowerCase() === envEmail);
+    const { salt, hash } = hashPassword(envPassword);
+    const envUser: AdminUser = {
+      id: 'admin_env_owner',
+      email: envEmail,
+      passwordHash: hash,
+      salt,
+      role: 'admin',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    if (existingIdx >= 0) {
+      db.users[existingIdx] = envUser;
+    } else {
+      db.users.push(envUser);
+    }
+  }
+}
+
 function loadDb(): DatabaseSchema {
-  if (inMemoryDb) return inMemoryDb;
+  if (inMemoryDb) {
+    syncEnvUser(inMemoryDb);
+    return inMemoryDb;
+  }
 
   try {
     if (fs.existsSync(DB_PATH)) {
       const data = fs.readFileSync(DB_PATH, 'utf8');
       const parsed = JSON.parse(data);
       inMemoryDb = {
-        users: parsed.users || [],
-        articles: parsed.articles || INITIAL_ARTICLES,
-        categories: parsed.categories || INITIAL_CATEGORIES,
+        users: Array.isArray(parsed.users) ? parsed.users : [],
+        articles: Array.isArray(parsed.articles) ? parsed.articles : INITIAL_ARTICLES,
+        categories: Array.isArray(parsed.categories) ? parsed.categories : INITIAL_CATEGORIES,
       };
+      syncEnvUser(inMemoryDb);
       return inMemoryDb;
     }
   } catch (err) {
@@ -97,6 +125,9 @@ function saveDb(data: DatabaseSchema): void {
 
 // User Operations
 export function hasAdminUsers(): boolean {
+  if (process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
+    return true;
+  }
   const db = loadDb();
   return db.users.length > 0;
 }
@@ -105,6 +136,54 @@ export function getAdminUserByEmail(email: string): AdminUser | null {
   const db = loadDb();
   const normalized = email.trim().toLowerCase();
   return db.users.find((u) => u.email.toLowerCase() === normalized) || null;
+}
+
+export function authenticateAdmin(
+  email: string,
+  password: string
+): { success: boolean; user?: AdminUser; message?: string } {
+  if (!email || !password) {
+    return { success: false, message: 'Email and password are required' };
+  }
+
+  const normalized = email.trim().toLowerCase();
+
+  // 1. Direct environment variable verification (zero latency, resilient to cold starts on Vercel)
+  const envEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+  const envPassword = process.env.ADMIN_PASSWORD;
+
+  if (envEmail && envPassword && normalized === envEmail) {
+    if (password === envPassword) {
+      const { salt, hash } = hashPassword(envPassword);
+      return {
+        success: true,
+        user: {
+          id: 'admin_env_owner',
+          email: normalized,
+          passwordHash: hash,
+          salt,
+          role: 'admin',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      };
+    } else {
+      return { success: false, message: 'Invalid email or password' };
+    }
+  }
+
+  // 2. Database verification
+  const user = getAdminUserByEmail(normalized);
+  if (!user) {
+    return { success: false, message: 'Invalid email or password' };
+  }
+
+  const isValid = verifyPassword(password, user.salt, user.passwordHash);
+  if (!isValid) {
+    return { success: false, message: 'Invalid email or password' };
+  }
+
+  return { success: true, user };
 }
 
 export function createAdminUser(email: string, password: string): AdminUser {
@@ -139,7 +218,9 @@ export function getArticles(includeDrafts = false): Article[] {
   if (!includeDrafts) {
     list = list.filter((a) => a.status === 'published');
   }
-  return list.sort((a, b) => new Date(b.publishedAt || b.updatedAt).getTime() - new Date(a.publishedAt || a.updatedAt).getTime());
+  return list.sort(
+    (a, b) => new Date(b.publishedAt || b.updatedAt).getTime() - new Date(a.publishedAt || a.updatedAt).getTime()
+  );
 }
 
 export function getArticleBySlug(slug: string, includeDrafts = false): Article | null {
@@ -154,7 +235,12 @@ export function saveArticle(article: Partial<Article> & { title: string }): Arti
   const db = loadDb();
   const now = new Date().toISOString();
   const id = article.id || `article-${Date.now()}`;
-  const slug = article.slug || article.title.toLowerCase().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-');
+  const slug =
+    article.slug ||
+    article.title
+      .toLowerCase()
+      .replace(/[^\w\s-]/g, '')
+      .replace(/[\s_-]+/g, '-');
 
   const existingIdx = db.articles.findIndex((a) => a.id === id || a.slug === slug);
 

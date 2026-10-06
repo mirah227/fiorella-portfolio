@@ -6,14 +6,36 @@ export interface AuthUser {
 }
 
 export interface SetupStatusResponse {
+  success?: boolean;
   needsSetup: boolean;
   hasAdmin: boolean;
+  message?: string;
 }
 
 export interface LoginResponse {
+  success: boolean;
   message: string;
   user: AuthUser;
   token: string;
+}
+
+interface ApiResponseEnvelope<T> {
+  success?: boolean;
+  message?: string;
+  error?: string;
+  token?: string;
+  user?: AuthUser;
+  needsSetup?: boolean;
+  hasAdmin?: boolean;
+  authenticated?: boolean;
+  data?: T;
+}
+
+interface SafeFetchResult<T> {
+  ok: boolean;
+  status: number;
+  data: ApiResponseEnvelope<T> | null;
+  errorMessage: string | null;
 }
 
 const TOKEN_KEY = 'fiorella_admin_token';
@@ -53,17 +75,77 @@ export function getAuthHeaders(): Record<string, string> {
   return headers;
 }
 
-export async function checkSetupStatus(): Promise<SetupStatusResponse> {
+/**
+ * Resilient JSON fetcher that safely inspects Content-Type and body
+ * to prevent JSON parse exceptions when an endpoint or proxy returns HTML/plain-text.
+ */
+async function safeFetchJson<T = any>(
+  input: RequestInfo | URL,
+  init?: RequestInit
+): Promise<SafeFetchResult<T>> {
   try {
-    const res = await fetch('/api/auth/setup-status');
-    if (!res.ok) {
-      return { needsSetup: false, hasAdmin: true };
+    const res = await fetch(input, init);
+    const contentType = res.headers.get('content-type') || '';
+    let parsed: ApiResponseEnvelope<T> | null = null;
+    let errorMessage: string | null = null;
+
+    if (contentType.includes('application/json')) {
+      try {
+        parsed = (await res.json()) as ApiResponseEnvelope<T>;
+      } catch {
+        parsed = null;
+      }
+    } else {
+      // Server returned non-JSON content (e.g. Vercel proxy error, HTML error page, 502/503/500)
+      const rawText = await res.text().catch(() => '');
+      if (rawText.toLowerCase().includes('server error') || res.status >= 500) {
+        errorMessage = 'Authentication service is temporarily unavailable';
+      } else if (res.status === 404) {
+        errorMessage = 'Authentication endpoint not found';
+      } else if (res.status === 401 || res.status === 403) {
+        errorMessage = 'Invalid email or password';
+      } else {
+        errorMessage = 'Authentication service returned an unexpected response format';
+      }
     }
-    return await res.json();
-  } catch (err) {
-    console.warn('Could not reach setup status endpoint:', err);
-    return { needsSetup: false, hasAdmin: true };
+
+    if (!parsed && !errorMessage) {
+      if (!res.ok) {
+        errorMessage =
+          res.status >= 500
+            ? 'Authentication service is temporarily unavailable'
+            : `Authentication failed (status ${res.status})`;
+      }
+    }
+
+    return {
+      ok: res.ok,
+      status: res.status,
+      data: parsed,
+      errorMessage,
+    };
+  } catch (networkErr: any) {
+    console.warn('Network error during authentication fetch:', networkErr);
+    return {
+      ok: false,
+      status: 0,
+      data: null,
+      errorMessage: 'Unable to reach authentication service. Please check your internet connection.',
+    };
   }
+}
+
+export async function checkSetupStatus(): Promise<SetupStatusResponse> {
+  const result = await safeFetchJson<SetupStatusResponse>('/api/auth/setup-status');
+  if (result.ok && result.data) {
+    return {
+      needsSetup: Boolean(result.data.needsSetup),
+      hasAdmin: Boolean(result.data.hasAdmin),
+      success: true,
+    };
+  }
+  // Graceful fallback if endpoint is unreachable or error occurs
+  return { needsSetup: false, hasAdmin: true };
 }
 
 export async function checkSession(): Promise<{ authenticated: boolean; user?: AuthUser }> {
@@ -72,61 +154,84 @@ export async function checkSession(): Promise<{ authenticated: boolean; user?: A
     return { authenticated: false };
   }
 
-  try {
-    const res = await fetch('/api/auth/session', {
-      headers: getAuthHeaders(),
-    });
+  const result = await safeFetchJson<{ authenticated: boolean; user?: AuthUser }>('/api/auth/session', {
+    headers: getAuthHeaders(),
+  });
 
-    if (!res.ok) {
-      clearStoredToken();
-      return { authenticated: false };
-    }
-
-    const data = await res.json();
-    return {
-      authenticated: Boolean(data.authenticated),
-      user: data.user,
-    };
-  } catch {
+  if (!result.ok || !result.data?.authenticated) {
+    clearStoredToken();
     return { authenticated: false };
   }
+
+  return {
+    authenticated: true,
+    user: result.data.user,
+  };
 }
 
 export async function loginAdmin(email: string, password: string): Promise<LoginResponse> {
-  const res = await fetch('/api/auth/login', {
+  const result = await safeFetchJson<LoginResponse>('/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: email.trim(), password }),
   });
 
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.error || 'Authentication failed. Please verify credentials.');
+  if (!result.ok || !result.data || result.data.success === false) {
+    const message =
+      result.data?.message ||
+      result.data?.error ||
+      result.errorMessage ||
+      'Invalid email or password';
+    throw new Error(message);
   }
 
-  setStoredToken(data.token);
-  return data;
+  const token = result.data.token;
+  if (!token) {
+    throw new Error(result.data.message || 'Authentication failed: Missing session token');
+  }
+
+  setStoredToken(token);
+  return {
+    success: true,
+    message: result.data.message || 'Login successful',
+    token,
+    user: result.data.user || { email: email.trim(), role: 'admin' },
+  };
 }
 
 export async function setupOwnerAccount(email: string, password: string): Promise<LoginResponse> {
-  const res = await fetch('/api/auth/setup-owner', {
+  const result = await safeFetchJson<LoginResponse>('/api/auth/setup-owner', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: email.trim(), password }),
   });
 
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.error || 'Failed to create owner account.');
+  if (!result.ok || !result.data || result.data.success === false) {
+    const message =
+      result.data?.message ||
+      result.data?.error ||
+      result.errorMessage ||
+      'Failed to create owner account.';
+    throw new Error(message);
   }
 
-  setStoredToken(data.token);
-  return data;
+  const token = result.data.token;
+  if (!token) {
+    throw new Error(result.data.message || 'Account created but token was not received');
+  }
+
+  setStoredToken(token);
+  return {
+    success: true,
+    message: result.data.message || 'Owner account created successfully',
+    token,
+    user: result.data.user || { email: email.trim(), role: 'admin' },
+  };
 }
 
 export async function logoutAdmin(): Promise<void> {
   try {
-    await fetch('/api/auth/logout', {
+    await safeFetchJson('/api/auth/logout', {
       method: 'POST',
       headers: getAuthHeaders(),
     });

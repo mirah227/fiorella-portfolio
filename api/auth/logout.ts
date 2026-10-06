@@ -1,10 +1,10 @@
-import { app } from '../src/server/app';
+import { app } from '../../src/server/app';
 
 export default function handler(req: any, res: any) {
   try {
     return app(req, res);
   } catch (err) {
-    console.error('Vercel serverless invocation error:', err);
+    console.error('API /auth/logout error:', err);
     if (!res.headersSent) {
       res.setHeader('Content-Type', 'application/json');
       return res.status(500).json({
